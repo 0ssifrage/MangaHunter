@@ -1,12 +1,9 @@
 import json
 import os
+import sys
 import urllib
 import urllib2
 import zipfile
-
-manga_num = {
-    'gintama': 505435
-}
 
 
 class MangaHunter():
@@ -14,7 +11,19 @@ class MangaHunter():
         self.manga_id = 0
         self.chapter_list = {'manga_id': 0, 'data': []}
 
-    def get_chapter_list(self, manga_id):
+    def select_manga(self, cat_id=3, page=1):
+        url = 'http://m.ac.qq.com/GetData/getCategoryOpus'
+        url = '%s?categoryID=%i&page=%i' % (url, cat_id, page)
+        data = urllib2.urlopen(url).read()
+        manga_list = json.loads(data)
+        idx = 0
+        for m in manga_list['data']:
+            idx += 1
+            print idx, m['title']
+        opt = input('Select: ')
+        self.manga_id = int(manga_list['data'][opt-1]['comic_id'])
+
+    def get_chapter_list(self, manga_id=-1):
         def cmp_func(x, y):
             if not x.isdecimal():
                 return 1
@@ -22,6 +31,8 @@ class MangaHunter():
                 return -1
             return cmp(int(x), int(y))
 
+        if manga_id == -1:
+            manga_id = self.manga_id
         url = "http://m.ac.qq.com/GetData/getChapterList?id=%i" % manga_id
         data = urllib2.urlopen(url).read()
         clist = json.loads(data)
@@ -36,7 +47,9 @@ class MangaHunter():
         self.chapter_list['manga_id'] = manga_id
         self.chapter_list['data'] = chapter_list
 
-    def get_pics_list(self, manga_id, chapter_id):
+    def get_pics_list(self, chapter_id, manga_id=-1):
+        if manga_id == -1:
+            manga_id = self.manga_id
         url = "http://m.ac.qq.com/view/mGetPicHash?id=%i&cid=%i" % (
             manga_id, chapter_id
         )
@@ -64,11 +77,14 @@ class MangaHunter():
         pic_url = "%s&uin=%i&name=%i.mif2" % (url_base, uin, pic_id)
         return pic_url
 
-    def download_pics(self, manga_id, chapter, base_dir='manga/'):
+    def download_pics(self, chapter, display=False, base_dir='manga/',
+                      manga_id=-1):
+        if manga_id == -1:
+            manga_id = self.manga_id
         if (manga_id != self.chapter_list['manga_id']):
             self.get_chapter_list(manga_id)
         chapter_id = self.chapter_list['data'][chapter][0]
-        pics_list = self.get_pics_list(manga_id, chapter_id)
+        pics_list = self.get_pics_list(chapter_id, manga_id)
         url_base = self._get_pics_url_base(manga_id, chapter_id)
 
         folder = os.path.join(base_dir, '%03i' % chapter)
@@ -84,48 +100,69 @@ class MangaHunter():
                 f.write(urllib2.urlopen(pic_url).read())
                 f.close()
 
-    def download_pics_zip(self, manga_id, chapter, base_dir='manga/'):
+    def download_pics_zip(self, chapter, display=False,
+                          base_dir='manga/', manga_id=-1):
+        if manga_id == -1:
+            manga_id = self.manga_id
         if (manga_id != self.chapter_list['manga_id']):
             self.get_chapter_list(manga_id)
         chapter_id = self.chapter_list['data'][chapter][0]
-        pics_list = self.get_pics_list(manga_id, chapter_id)
+        pics_list = self.get_pics_list(chapter_id, manga_id)
         url_base = self._get_pics_url_base(manga_id, chapter_id)
 
         if not os.path.exists(base_dir):
             os.mkdir(base_dir)
         zipfile_path = os.path.join(base_dir, '%03i.zip' % chapter)
         f = zipfile.ZipFile(zipfile_path, 'w')
+        p_sum = len(pics_list['pHash'])
+        idx = 0
         for pic in pics_list['pHash'].values():
+            idx += 1
             pic_name = '%03i/%03i.jpg' % (chapter, int(pic['seq']))
             pic_id = int(pic['pid'])
             pic_url = self._get_pic_url(url_base, manga_id, chapter_id,
                                         pic_id)
+            if display:
+                sys.stdout.write('\r    (%i/%i) Downloading %s...' % (
+                    idx, p_sum, pic_name))
+                sys.stdout.flush()
+
             f.writestr(pic_name, urllib2.urlopen(pic_url).read())
         f.close()
+        if display:
+            sys.stdout.write('\r\n')
+            sys.stdout.flush()
 
-    def print_chapter_name(self, manga_id, start=1, end=99999):
+    def print_chapter_name(self, start=1, end=99999, manga_id=-1):
+        if manga_id == -1:
+            manga_id = self.manga_id
         self.get_chapter_list(manga_id)
         start = max(1, start)
         end = min(end, len(self.chapter_list['data']))
         for i in range(start, end + 1):
             print "[%03i] %s" % (i, chapter_list[i][1])
 
-    def download_batch(self, manga_id, start=1, end=99999, zip=True,
-                       base_dir='manga/'):
+    def download_batch(self, start=1, end=99999, zip=True, display=False,
+                       base_dir='manga/', manga_id=-1):
+        if manga_id == -1:
+            manga_id = self.manga_id
         self.get_chapter_list(manga_id)
         start = max(1, start)
         end = min(end, len(self.chapter_list['data']))
+        ch_sum = end + 1 - start
         for i in range(start, end + 1):
+            if display:
+                print '[%i/%i] Downloading %3i...' % (i-start+1, ch_sum, i)
             if zip:
-                self.download_pics_zip(manga_id, i, base_dir)
+                self.download_pics_zip(i, display, base_dir, manga_id)
             else:
-                self.download_pics(manga_id, i, base_dir)
+                self.download_pics(i, display, base_dir, manga_id)
 
 
 def test():
     mh = MangaHunter()
-    # mh.download_pics_zip(manga_num['gintama'], 509)
-    mh.download_batch(manga_num['gintama'], 470, 472)
+    mh.select_manga()
+    mh.download_batch(400, 401, display=True)
 
 if __name__ == "__main__":
     test()
