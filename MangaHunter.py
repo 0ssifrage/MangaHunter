@@ -58,8 +58,10 @@ class MangaHunter():
             manga_id, chapter_id
         )
         req = urllib2.Request(url)
-        req.add_header("Cookie", """ac_refer=http%3A%2F%2Fm.ac.qq.com%2F;
-                ac_random_token_view=a621eaf4250d9fd3f8578bf116ba8358;""")
+        req.add_header("Cookie", "ac_refer=%s; ac_random_token_view=%s;" % (
+            "http%3A%2F%2Fm.ac.qq.com%2F",
+            "a621eaf4250d9fd3f8578bf116ba8358"
+        ))
         req.add_header("Referer", rurl)
         data = urllib2.urlopen(req).read()
         pics_list = json.loads(data)
