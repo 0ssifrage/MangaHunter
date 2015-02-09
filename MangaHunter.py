@@ -1,3 +1,4 @@
+import cookielib
 import json
 import os
 import sys
@@ -11,17 +12,17 @@ class MangaHunter():
         self.manga_id = 0
         self.chapter_list = {'manga_id': 0, 'data': []}
 
-    def select_manga(self, cat_id=3, page=1):
+    def select_manga(self, cid=4, page=1):
         url = 'http://m.ac.qq.com/GetData/getCategoryOpus'
-        url = '%s?categoryID=%i&page=%i' % (url, cat_id, page)
+        url = '%s?ver=1&cid=%i&page=%i' % (url, cid, page)
         data = urllib2.urlopen(url).read()
         manga_list = json.loads(data)
         idx = 0
-        for m in manga_list['data']:
+        for m in manga_list:
             idx += 1
             print idx, m['title']
         opt = input('Select: ')
-        self.manga_id = int(manga_list['data'][opt-1]['comic_id'])
+        self.manga_id = int(manga_list[opt-1]['id'])
 
     def get_chapter_list(self, manga_id=-1):
         def cmp_func(x, y):
@@ -50,10 +51,17 @@ class MangaHunter():
     def get_pics_list(self, chapter_id, manga_id=-1):
         if manga_id == -1:
             manga_id = self.manga_id
-        url = "http://m.ac.qq.com/view/mGetPicHash?id=%i&cid=%i" % (
+        url = "http://m.ac.qq.com/View/mGetPicHash?id=%i&cid=%i" % (
             manga_id, chapter_id
         )
-        data = urllib2.urlopen(url).read()
+        rurl = "http://m.ac.qq.com/Comic/view/id/%i/cid/%i" % (
+            manga_id, chapter_id
+        )
+        req = urllib2.Request(url)
+        req.add_header("Cookie", """ac_refer=http%3A%2F%2Fm.ac.qq.com%2F;
+                ac_random_token_view=a621eaf4250d9fd3f8578bf116ba8358;""")
+        req.add_header("Referer", rurl)
+        data = urllib2.urlopen(req).read()
         pics_list = json.loads(data)
         return pics_list
 
